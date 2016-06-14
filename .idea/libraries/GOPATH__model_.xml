@@ -1,0 +1,18 @@
+<component name="libraryTable">
+  <library name="GOPATH &lt;model&gt;">
+    <CLASSES>
+      <root url="file://C:/gopath/src/bitbucket.org" />
+      <root url="file://C:/gopath/src/gopkg.in" />
+      <root url="file://C:/gopath/src/github.com" />
+      <root url="file://C:/gopath/src/speter.net" />
+      <root url="file://C:/gopath/src/golang.org" />
+      <root url="file://C:/gopath/src/k8s.io" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+    <excluded>
+      <root url="file://$PROJECT_DIR$" />
+      <root url="file://$PROJECT_DIR$/model" />
+    </excluded>
+  </library>
+</component>

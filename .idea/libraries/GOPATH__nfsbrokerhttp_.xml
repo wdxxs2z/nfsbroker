@@ -1,0 +1,21 @@
+<component name="libraryTable">
+  <library name="GOPATH &lt;nfsbrokerhttp&gt;">
+    <CLASSES>
+      <root url="file://C:/gopath/src/bitbucket.org" />
+      <root url="file://C:/gopath/src/gopkg.in" />
+      <root url="file://C:/gopath/src/github.com" />
+      <root url="file://C:/gopath/src/speter.net" />
+      <root url="file://C:/gopath/src/golang.org" />
+      <root url="file://C:/gopath/src/k8s.io" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+    <excluded>
+      <root url="file://$PROJECT_DIR$/nfsbrokerlocal" />
+      <root url="file://$PROJECT_DIR$/nfsbrokerhttp" />
+      <root url="file://$PROJECT_DIR$/utils" />
+      <root url="file://$PROJECT_DIR$/model" />
+      <root url="file://$PROJECT_DIR$" />
+    </excluded>
+  </library>
+</component>
