@@ -33,7 +33,7 @@ var nfsHost = flag.String(
 
 var nfsVer = flag.Int(
 	"version",
-	3,
+	4,
 	"version number for nfs server",
 )
 
