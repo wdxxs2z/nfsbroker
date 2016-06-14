@@ -8,7 +8,7 @@ import (
 
 	"github.com/wdxxs2z/nfsbroker/nfsbrokerhttp"
 	"github.com/wdxxs2z/nfsbroker/nfsbrokerlocal"
-	"github.com/wdxxs2z/nfsbroker/nfsbroker/model"
+	"github.com/wdxxs2z/nfsbroker/model"
 	"github.com/wdxxs2z/nfsbroker/utils"
 	cf_debug_server "github.com/cloudfoundry-incubator/cf-debug-server"
 	cf_lager "github.com/cloudfoundry-incubator/cf-lager"
