@@ -172,7 +172,7 @@ func (f *realFileUtil) ReadFile(filename string) ([]byte, error) {
 }
 
 func (f *realFileUtil) Remove(filepath string) error {
-	return os.Remove(filepath)
+	return os.RemoveAll(filepath)
 }
 
 func (f *realFileUtil) Exists(filepath string) bool {
