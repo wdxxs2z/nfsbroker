@@ -9,6 +9,8 @@ import (
 	"github.com/pivotal-golang/lager"
 	"github.com/cloudfoundry/gunk/os_wrap/exec_wrap"
 	"fmt"
+	"strings"
+	"os/exec"
 )
 
 const (
@@ -72,6 +74,18 @@ func (n *nfsClient) MountFileSystem(logger lager.Logger, remoteMountPoint string
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create local director '%s', mount filesystem failed", n.baseLocalMountPoint), err)
 		return "",fmt.Errorf("failed to create local director '%s', mount filesystem failed", n.baseLocalMountPoint)
+	}
+
+	//Judgement the director mounted. The code and logical must be modify, but now shitty to use it.
+	cmd := exec.Command("mountpoint", n.baseLocalMountPoint)
+	out, err := cmd.Output()
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to mountpoint the local director '%s', mountpoint director failed", n.baseLocalMountPoint), err)
+		return "",fmt.Errorf("can't mount the '%s', failed verify the filesystem is mounted", n.baseLocalMountPoint)
+	}
+	if strings.EqualFold(strings.Replace(string(out), "\n", "", -1), n.baseLocalMountPoint + " is a mountpoint") {
+		n.mounted = true
+		return n.baseLocalMountPoint, nil
 	}
 
 	var cmdArgs []string
