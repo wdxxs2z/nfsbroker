@@ -80,7 +80,7 @@ func (n *nfsClient) MountFileSystem(logger lager.Logger, remoteMountPoint string
 	cmd := exec.Command("mountpoint", n.baseLocalMountPoint)
 	out, err := cmd.Output()
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to create local director '%s', mount filesystem failed", n.baseLocalMountPoint), err)
+		logger.Error(fmt.Sprintf("warning,failed to command mountpoint '%s'", n.baseLocalMountPoint), err)
 		//return "",fmt.Errorf("can't mount the '%s', failed verify the filesystem is mounted", n.baseLocalMountPoint)
 	}
 	if strings.EqualFold(strings.Replace(string(out), "\n", "", -1), n.baseLocalMountPoint + " is a mountpoint") {
