@@ -14,7 +14,6 @@ import (
 )
 
 const (
-	//NfsOptions   = "nfsopts"
 	DefaultNfsV3 = "port=2049,nolock,proto=tcp"
 )
 
@@ -29,6 +28,7 @@ type Client interface {
 
 type nfsClient struct{
 	remoteInfo          string
+	remoteMount         string
 	version             int
 	useFileUtil         FileUtil
 	baseLocalMountPoint string
@@ -36,9 +36,10 @@ type nfsClient struct{
 	invoker             Invoker
 }
 
-func NewNfsClientWithInfokerAndFileUtil(remoteInfo string, version int, useInvoker Invoker, useFileUtil FileUtil, localMountPoint string) Client{
+func NewNfsClientWithInfokerAndFileUtil(remoteInfo string, remoteMount string,version int, useInvoker Invoker, useFileUtil FileUtil, localMountPoint string) Client{
 	return &nfsClient{
 		remoteInfo:          remoteInfo,
+		remoteMount:         remoteMount,
 		version:             version,
 		invoker:             useInvoker,
 		useFileUtil:         useFileUtil,
@@ -47,9 +48,10 @@ func NewNfsClientWithInfokerAndFileUtil(remoteInfo string, version int, useInvok
 	}
 }
 
-func NewNfsClient(remoteInfo string, version int,localMountPoint string) Client{
+func NewNfsClient(remoteInfo string, remoteMount string, version int,localMountPoint string) Client{
 	return &nfsClient{
 		remoteInfo:          remoteInfo,
+		remoteMount:         remoteMount,
 		version:             version,
 		mounted:             false,
 		baseLocalMountPoint: localMountPoint,
@@ -91,7 +93,6 @@ func (n *nfsClient) MountFileSystem(logger lager.Logger, remoteMountPoint string
 	var cmdArgs []string
 	switch n.version {
 	case 3:
-		logger.Info("NFS version 3.")
 		cmdArgs = []string{"-o", DefaultNfsV3 , n.remoteInfo + ":" + remoteMountPoint, n.baseLocalMountPoint}
 	default:
 		cmdArgs = []string{"-t","nfs4" , n.remoteInfo + ":" + remoteMountPoint,n.baseLocalMountPoint}

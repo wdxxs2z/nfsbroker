@@ -21,7 +21,7 @@ import (
 
 var listenAddress = flag.String(
 	"listenAddr",
-	"0.0.0.0:8989",
+	"0.0.0.0:8980",
 	"host:port to serve nfs service broker function",
 )
 
@@ -29,6 +29,12 @@ var nfsHost = flag.String(
 	"remoteInfo",
 	"10.10.130.49",
 	"host for nfs remoteInfo server",
+)
+
+var remoteMount = flag.String(
+	"remoremount",
+	"/var/vcap/store",
+	"nfs remote mount director",
 )
 
 var nfsVer = flag.Int(
@@ -70,7 +76,7 @@ func main() {
 }
 
 func createNfsBrokerServer(logger lager.Logger, listenAddress string) (grouper.Members, error) {
-	nfsClient := nfsbrokerlocal.NewNfsClient(*nfsHost,*nfsVer,*defaultMountPath)
+	nfsClient := nfsbrokerlocal.NewNfsClient(*nfsHost, *remoteMount, *nfsVer, *defaultMountPath)
 	existingServiceInstances, err := loadServiceInstances()
 	if err != nil {
 		return nil, err
