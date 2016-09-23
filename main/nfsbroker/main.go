@@ -1,22 +1,22 @@
 package main
 
 import (
-	"errors"
 	"flag"
-	"fmt"
-	"os"
 
-	"github.com/wdxxs2z/nfsbroker/nfsbrokerhttp"
-	"github.com/wdxxs2z/nfsbroker/nfsbrokerlocal"
-	"github.com/wdxxs2z/nfsbroker/model"
-	"github.com/wdxxs2z/nfsbroker/utils"
-	cf_debug_server "github.com/cloudfoundry-incubator/cf-debug-server"
-	cf_lager "github.com/cloudfoundry-incubator/cf-lager"
-	"github.com/pivotal-golang/lager"
+	"../../utils"
+	"../../nfsbroker"
+
+	"code.cloudfoundry.org/debugserver"
+	"code.cloudfoundry.org/cflager"
+
+	"code.cloudfoundry.org/lager"
+	"github.com/pivotal-cf/brokerapi"
+	ioutilshim "code.cloudfoundry.org/goshims/ioutil"
+
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/http_server"
-	"github.com/tedsuo/ifrit/sigmon"
+	"fmt"
 )
 
 var listenAddress = flag.String(
@@ -55,99 +55,107 @@ var defaultMountPath = flag.String(
 	"local director to mount within",
 )
 
+var serviceName = flag.String(
+	"serviceName",
+	"nfs",
+	"name to registrer with cloud controller",
+)
+
+var serviceId =flag.String(
+	"serviceId",
+	"nfs-service-guid",
+	"id to nfs service",
+)
+
+var planName = flag.String(
+	"planName",
+	"free",
+	"name to the nfs service plan",
+)
+
+var planId = flag.String(
+	"planId",
+	"nfs-plan-guid",
+	"guid to the nfs service plan",
+)
+
+var planDesc = flag.String(
+	"planDesc",
+	"free nfs filesystem",
+	"description of the service plan to register with cloud controller",
+)
+
+var dataDir = flag.String(
+	"dataDir",
+	"",
+	"[REQUIRED] - Broker's state will be stored here to persist across reboots",
+)
+
+var username = flag.String(
+	"username",
+	"admin",
+	"basic auth username to verify on incoming requests",
+)
+var password = flag.String(
+	"password",
+	"admin",
+	"basic auth password to verify on incoming requests",
+)
+
+var displayName = flag.String(
+	"displayName",
+	"common volume driver",
+	"display the volume service broker name",
+)
+
+var imageUrl = flag.String(
+	"imageUrl",
+	"",
+	"base64 code image or image url",
+)
+
 func main() {
 	parseCommandLine()
-	withLogger, logTap := logger()
-	defer withLogger.Info("ends")
 
-	servers, err := createNfsBrokerServer(withLogger, *listenAddress)
+	logger, logSink := cflager.New(fmt.Sprintf("%s-volume-service-broker", *serviceName))
+	logger.Info("start")
+	defer logger.Info("ends")
 
-	if err!= nil {
-		panic("failed to load services metadata......aborting")
+	server := createBrokerServer(logger)
+
+	if dbgAddr := debugserver.DebugAddress(flag.CommandLine);dbgAddr != "" {
+		server = utils.ProcessRunnerFor(grouper.Members{
+			{"debug-server", debugserver.Runner(dbgAddr,logSink)},
+			{"broker-api-server", server},
+		})
 	}
-	if dbgAddr := cf_debug_server.DebugAddress(flag.CommandLine);dbgAddr != "" {
-		servers = append(grouper.Members{
-			{"debug-server", cf_debug_server.Runner(dbgAddr, logTap)},
-		}, servers...)
-	}
-	process := ifrit.Invoke(processRunnerFor(servers))
-	withLogger.Info("started")
-	untilTerminated(withLogger, process)
+	process := ifrit.Invoke(server)
+	logger.Info("started-nfs-serverbroker", lager.Data{"brokerAddress": *listenAddress})
+	utils.UntilTerminated(logger, process)
 }
 
-func createNfsBrokerServer(logger lager.Logger, listenAddress string) (grouper.Members, error) {
-	nfsClient := nfsbrokerlocal.NewNfsClient(*nfsHost, *remoteMount, *nfsVer, *defaultMountPath)
-	existingServiceInstances, err := loadServiceInstances()
-	if err != nil {
-		return nil, err
-	}
-	existingServiceBindings, err := loadServiceBindings()
-	if err != nil {
-		return nil, err
-	}
-	controller := nfsbrokerlocal.NewController(nfsClient, *configPath, existingServiceInstances, existingServiceBindings)
-	handler, err := nfsbrokerhttp.NewHandler(logger, controller)
-	exitOnFailure(logger, err)
-
-	return grouper.Members{
-		{"http-server", http_server.New(listenAddress, handler)},
-	}, nil
-}
-
-func exitOnFailure(logger lager.Logger, err error) {
-	if err != nil {
-		logger.Error("Fatal err.. aborting", err)
-		panic(err.Error())
-	}
-}
-
-func untilTerminated(logger lager.Logger, process ifrit.Process) {
-	err := <-process.Wait()
-	exitOnFailure(logger, err)
-}
-
-func processRunnerFor(servers grouper.Members) ifrit.Runner {
-	return sigmon.New(grouper.NewOrdered(os.Interrupt, servers))
-}
-
-func loadServiceBindings() (map[string]*model.ServiceBinding, error) {
-	var bindingMap map[string]*model.ServiceBinding
-	err := utils.ReadAndUnmarshal(&bindingMap, *configPath, "service_bindings.json")
-	if err != nil {
-		if os.IsNotExist(err) {
-			fmt.Printf("WARNING: key map data file '%s' does not exist: \n", "service_bindings.json")
-			bindingMap = make(map[string]*model.ServiceBinding)
-		} else {
-			return nil, errors.New(fmt.Sprintf("Could not load the service instances, message: %s", err.Error()))
-		}
-	}
-
-	return bindingMap, nil
-}
-
-func loadServiceInstances() (map[string]*model.ServiceInstance, error){
-	var serviceInstancesMap map[string]*model.ServiceInstance
-
-	err := utils.ReadAndUnmarshal(&serviceInstancesMap, *configPath, "service_instances.json")
-	if err != nil {
-		if os.IsNotExist(err) {
-			fmt.Printf("WARNING: service instance data file '%s' does not exist: \n", "service_instances.json")
-			serviceInstancesMap = make(map[string]*model.ServiceInstance)
-		} else {
-			return nil, errors.New(fmt.Sprintf("Could not load the service instances, message: %s", err.Error()))
-		}
-	}
-
-	return serviceInstancesMap, nil
-}
-
-func logger() (lager.Logger, *lager.ReconfigurableSink) {
-	logger, reconfigurableSink := cf_lager.New("nfs-broker")
-	return logger, reconfigurableSink
+func createBrokerServer(logger lager.Logger) ifrit.Runner {
+	controller := nfsbroker.NewController(nfsbroker.NewNfsClient(*nfsHost, *remoteMount, *nfsVer, *defaultMountPath))
+	serviceBroker := nfsbroker.New(
+		logger,
+		controller,
+		*serviceName,
+		*serviceId,
+		*planName,
+		*planId,
+		*planDesc,
+		*displayName,
+		*imageUrl,
+		*dataDir,
+		&ioutilshim.IoutilShim{},
+	)
+	credentials := brokerapi.BrokerCredentials{Username:*username, Password:*password}
+	handler := brokerapi.New(serviceBroker, logger.Session("broker-api"), credentials)
+	return http_server.New(*listenAddress, handler)
 }
 
 func parseCommandLine() {
-	cf_lager.AddFlags(flag.CommandLine)
-	cf_debug_server.AddFlags(flag.CommandLine)
+	cflager.AddFlags(flag.CommandLine)
+	debugserver.AddFlags(flag.CommandLine)
 	flag.Parse()
 }

@@ -17,18 +17,25 @@ type CreateServiceBindingResponse struct {
 
 type Credentials struct {
 	URI string `json:"uri"`
+	Hostname string `json:"hostname"`
+	Port     string `json:"port"`
+	Name     string `json:"name"`
+	VHost    string `json:"vhost"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 type VolumeMount struct {
-	ContainerPath string                    `json:"container_path"`
+	ContainerDir  string                    `json:"container_dir"`
 	Mode          string                    `json:"mode"`
-	Private       VolumeMountPrivateDetails `json:"private"`
+	Driver        string                    `json:"driver"`
+	DeviceType    string                    `json:"device_type"`
+	Device        SharedDevice              `json:"device"`
 }
 
-type VolumeMountPrivateDetails struct {
-	Driver  string     `json:"driver"`
-	GroupId string     `json:"group_id"`
-	Config  NfsConfig  `json:"config"`
+type SharedDevice struct {
+	VolumeId      string     `json:"volume_id"`
+	MountConfig   NfsConfig  `json:"mount_config"`
 }
 
 type NfsConfig struct {

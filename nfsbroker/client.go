@@ -1,20 +1,23 @@
-package nfsbrokerlocal
+package nfsbroker
 
 import (
 	"os"
 	"path/filepath"
-	"github.com/wdxxs2z/nfsbroker/utils"
-	"io/ioutil"
-
-	"github.com/pivotal-golang/lager"
-	"github.com/cloudfoundry/gunk/os_wrap/exec_wrap"
 	"fmt"
 	"strings"
 	"os/exec"
+
+	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/goshims/execshim"
+	"code.cloudfoundry.org/goshims/os"
+	ioutilshim "code.cloudfoundry.org/goshims/ioutil"
+
+	"../utils"
 )
 
 const (
-	DefaultNfsV3 = "port=2049,nolock,proto=tcp"
+	DefaultNfsV3 string = "port=2049,nolock,proto=tcp"
+	CellBasePath string = "/var/vcap/data/volumes"
 )
 
 type Client interface {
@@ -22,7 +25,7 @@ type Client interface {
 	MountFileSystem(lager.Logger, string) (string, error)
 	CreateShare(lager.Logger, string) (string, error)
 	DeleteShare(lager.Logger, string) error
-	GetPathForShare(lager.Logger, string) (string, error)
+	GetPathForShare(lager.Logger, string) (string, string, error)
 	GetConfigDetails(lager.Logger) (string, int, error)
 }
 
@@ -30,19 +33,21 @@ type nfsClient struct{
 	remoteInfo          string
 	remoteMount         string
 	version             int
-	useFileUtil         FileUtil
+	useFileUtil         ioutilshim.Ioutil
+	os                  osshim.Os
 	baseLocalMountPoint string
 	mounted             bool
 	invoker             Invoker
 }
 
-func NewNfsClientWithInfokerAndFileUtil(remoteInfo string, remoteMount string,version int, useInvoker Invoker, useFileUtil FileUtil, localMountPoint string) Client{
+func NewNfsClientWithInfokerAndFileUtil(remoteInfo string, remoteMount string,version int, useInvoker Invoker, localMountPoint string, os osshim.Os, useFileUtil ioutilshim.Ioutil) Client{
 	return &nfsClient{
 		remoteInfo:          remoteInfo,
 		remoteMount:         remoteMount,
 		version:             version,
 		invoker:             useInvoker,
 		useFileUtil:         useFileUtil,
+		os         :         os,
 		mounted:             false,
 		baseLocalMountPoint: localMountPoint,
 	}
@@ -53,10 +58,11 @@ func NewNfsClient(remoteInfo string, remoteMount string, version int,localMountP
 		remoteInfo:          remoteInfo,
 		remoteMount:         remoteMount,
 		version:             version,
+		useFileUtil:         &ioutilshim.IoutilShim{},
+		os         :         &osshim.OsShim{},
 		mounted:             false,
 		baseLocalMountPoint: localMountPoint,
 		invoker:             NewRealInvoker(),
-		useFileUtil:         NewRealFileUtil(),
 	}
 }
 
@@ -72,7 +78,7 @@ func (n *nfsClient) MountFileSystem(logger lager.Logger, remoteMountPoint string
 	logger.Info("start")
 	defer logger.Info("end")
 
-	err := n.useFileUtil.MkdirAll(n.baseLocalMountPoint, os.ModePerm)
+	err := n.os.MkdirAll(n.baseLocalMountPoint, os.ModePerm)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create local director '%s', mount filesystem failed", n.baseLocalMountPoint), err)
 		return "",fmt.Errorf("failed to create local director '%s', mount filesystem failed", n.baseLocalMountPoint)
@@ -113,7 +119,7 @@ func (n *nfsClient) CreateShare(logger lager.Logger, shareName string) (string, 
 	defer logger.Info("end")
 	logger.Info("share-name", lager.Data{shareName: shareName})
 	sharePath := filepath.Join(n.baseLocalMountPoint, shareName)
-	err := n.useFileUtil.MkdirAll(sharePath, os.ModePerm)
+	err := n.os.MkdirAll(sharePath, os.ModePerm)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create share '%s'", sharePath), err)
 		return "", fmt.Errorf("failed to create share '%s'", sharePath)
@@ -127,7 +133,7 @@ func (n *nfsClient) DeleteShare(logger lager.Logger, shareName string) error {
 	defer logger.Info("end")
 
 	sharePath := filepath.Join(n.baseLocalMountPoint, shareName)
-	err := n.useFileUtil.Remove(sharePath)
+	err := n.os.Remove(sharePath)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to delete share '%s'", sharePath), err)
 		return fmt.Errorf("failed to delete share '%s'", sharePath)
@@ -135,17 +141,22 @@ func (n *nfsClient) DeleteShare(logger lager.Logger, shareName string) error {
 	return nil
 }
 
-func (n *nfsClient) GetPathForShare(logger lager.Logger, shareName string) (string, error) {
+func (n *nfsClient) GetPathForShare(logger lager.Logger, shareName string) (string, string ,error) {
 	logger = logger.Session("get-path-for-share")
 	logger.Info("start")
 	defer logger.Info("end")
+
 	logger.Info("share-name", lager.Data{shareName: shareName})
-	shareAbsPath := filepath.Join(n.baseLocalMountPoint, shareName)
-	exists := n.useFileUtil.Exists(shareAbsPath)
+
+	shareLocalPath := filepath.Join(n.baseLocalMountPoint, shareName)
+	exists := utils.Exists(shareLocalPath, n.os)
 	if exists == false {
-		return "", fmt.Errorf("share not found, internal error")
+		return "","", fmt.Errorf("share not found, internal error")
 	}
-	return shareAbsPath, nil
+
+	shareAbsPath := filepath.Join(n.remoteMount, shareName)
+	cellPath := filepath.Join(CellBasePath, shareName)
+	return shareAbsPath, cellPath ,nil
 }
 
 func (n *nfsClient) GetConfigDetails(lager.Logger) (string, int, error) {
@@ -157,44 +168,9 @@ func (n *nfsClient) GetConfigDetails(lager.Logger) (string, int, error) {
 
 func (n *nfsClient) invokeNFS(logger lager.Logger, args []string) error {
 	cmd := "mount"
+	logger.Info("invoke-nfs", lager.Data{"cmd": cmd, "args": args})
+	defer logger.Debug("done-invoking-nfs")
 	return n.invoker.Invoke(logger, cmd, args)
-}
-
-type FileUtil interface {
-	MkdirAll(filepath string, perm os.FileMode) error
-	WriteFile(filename string, data []byte, perm os.FileMode) error
-	ReadFile(filepath string) ([]byte, error)
-	Remove(filepath string) error
-	Exists(filepath string) bool
-}
-
-type realFileUtil struct {}
-
-func NewRealFileUtil() FileUtil{
-	return &realFileUtil{}
-}
-
-func (f *realFileUtil) MkdirAll(filepath string, perm os.FileMode) error{
-	return os.MkdirAll(filepath, perm)
-}
-
-func (f *realFileUtil) WriteFile(filename string, data []byte, perm os.FileMode) error {
-	return ioutil.WriteFile(filename, data, perm)
-}
-
-func (f *realFileUtil) ReadFile(filename string) ([]byte, error) {
-	return utils.ReadFile(filename)
-}
-
-func (f *realFileUtil) Remove(filepath string) error {
-	return os.RemoveAll(filepath)
-}
-
-func (f *realFileUtil) Exists(filepath string) bool {
-	if _, err := os.Stat(filepath) ; os.IsNotExist(err){
-		return false
-	}
-	return true
 }
 
 type Invoker interface {
@@ -202,14 +178,14 @@ type Invoker interface {
 }
 
 type realInvoker struct {
-	useExec exec_wrap.Exec
+	useExec execshim.Exec
 }
 
 func NewRealInvoker() Invoker {
-	return NewRealInvokerWithExec(exec_wrap.NewExec())
+	return NewRealInvokerWithExec(&execshim.ExecShim{})
 }
 
-func NewRealInvokerWithExec(useExec exec_wrap.Exec) Invoker {
+func NewRealInvokerWithExec(useExec execshim.Exec) Invoker {
 	return &realInvoker{useExec}
 }
 
@@ -218,7 +194,7 @@ func (r *realInvoker) Invoke(logger lager.Logger, executable string, cmdArgs []s
 
 	_, err := cmdHandle.StdoutPipe()
 	if err != nil {
-		logger.Error("unable to get stdout", err)
+		logger.Error("unable-to-get-stdout", err)
 		return err
 	}
 
