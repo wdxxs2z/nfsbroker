@@ -32,7 +32,7 @@ var nfsHost = flag.String(
 )
 
 var remoteMount = flag.String(
-	"remoremount",
+	"remoteMount",
 	"/var/vcap/store",
 	"nfs remote mount director",
 )
