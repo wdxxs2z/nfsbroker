@@ -101,7 +101,7 @@ func (n *nfsClient) MountFileSystem(logger lager.Logger, remoteMountPoint string
 	case 3:
 		cmdArgs = []string{"-o", DefaultNfsV3 , n.remoteInfo + ":" + n.remoteMount , n.baseLocalMountPoint}
 	default:
-		cmdArgs = []string{"-t","nfs4" , n.remoteInfo + ":" + n.remoteMount ,n.baseLocalMountPoint}
+		cmdArgs = []string{"-t","nfs4" , n.remoteInfo + ":" + "/" ,n.baseLocalMountPoint}
 	}
 
 	err = n.invokeNFS(logger, cmdArgs)
