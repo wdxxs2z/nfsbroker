@@ -34,7 +34,7 @@ var nfsHost = flag.String(
 var remoteMount = flag.String(
 	"remoteMount",
 	"/var/vcap/store",
-	"nfs remote mount director",
+	"if v3,the remoteMount is full director:/var/vcap/store/shared,if v4,the default is '/',you need add shared sub director such as /shared.",
 )
 
 var nfsVer = flag.Int(
