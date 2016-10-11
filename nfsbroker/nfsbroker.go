@@ -25,14 +25,21 @@ type lock interface {
 	Unlock()
 }
 
+type serviceMetadata struct{
+	DisplayName         string `json:"displayName,omitempty"`
+	ImageUrl            string `json:"imageUrl,omitempty"`
+	LongDescription     string `json:"longDescription,omitempty"`
+	ProviderDisplayName string `json:"providerDisplayName,omitempty"`
+	DocumentationUrl    string `json:"documentationUrl,omitempty"`
+	SupportUrl          string `json:"supportUrl,omitempty"`
+}
+
 type serviceDetails struct {
 	ServiceName string     `json:"ServiceName"`
 	ServiceId   string     `json:"ServiceId"`
 	PlanName    string     `json:"PlanName"`
 	PlanId      string     `json:"PlanId"`
 	PlanDesc    string     `json:"PlanDesc"`
-	DisplayName string     `json:"displayName,omitempty"`
-	ImageUrl    string     `json:"imageUrl,omitempty"`
 }
 
 type serviceMap struct {
@@ -48,6 +55,7 @@ type broker struct {
 	mutex           lock
 	sd              serviceDetails
 	sm              serviceMap
+	sMetadata       serviceMetadata
 }
 
 func New(logger lager.Logger, controller Controller, serviceName,serviceId,planName,planId,planDesc,displayName,imageUrl,dataDir string,ioutil ioutilshim.Ioutil) *broker {
@@ -57,11 +65,12 @@ func New(logger lager.Logger, controller Controller, serviceName,serviceId,planN
 		dataDir:     dataDir,
 		ioutil:      ioutil,
 		mutex:       &sync.Mutex{},
-		sd:          serviceDetails{serviceName,serviceId,planName,planId,planDesc,displayName,imageUrl},
+		sd:          serviceDetails{serviceName,serviceId,planName,planId,planDesc},
 		sm:          serviceMap{
 			InstanceMap: map[string]brokerapi.ProvisionDetails{},
 			BindingMap : map[string]brokerapi.BindDetails{},
 		},
+		sMetadata: serviceMetadata{displayName, imageUrl, "This is storage volume service to mount application and shared", displayName, "https://github.com/cloudfoundry-incubator/volman", "https://github.com/cloudfoundry-incubator/volman"},
 	}
 	selfBroker.restoreServiceMap()
 	return &selfBroker
@@ -76,7 +85,7 @@ func (b *broker) Services() []brokerapi.Service {
 	return []brokerapi.Service{{
 		ID:            b.sd.ServiceId,
 		Name:          b.sd.ServiceName,
-		Description:   fmt.Sprintf("%s service docs: https://github.com/wdxxs2z/%s-init", b.sd.ServiceName, b.sd.ServiceName),
+		Description:   fmt.Sprintf("%s service docs: https://github.com/cloudfoundry-incubator/volman", b.sd.ServiceName, b.sd.ServiceName),
 		Bindable:      true,
 		Tags:          []string{b.sd.ServiceName},
 		PlanUpdatable: false,
@@ -87,6 +96,14 @@ func (b *broker) Services() []brokerapi.Service {
 			Free:        new(bool), //not is true,is new(bool)
 		}},
 		Requires:      []brokerapi.RequiredPermission{PermissionVolumeMount},
+		Metadata:      &brokerapi.ServiceMetadata{
+			DisplayName:         b.sMetadata.DisplayName,
+			ImageUrl:            b.sMetadata.ImageUrl,
+			LongDescription:     b.sMetadata.LongDescription,
+			ProviderDisplayName: b.sMetadata.ProviderDisplayName,
+			DocumentationUrl:    b.sMetadata.DocumentationUrl,
+			SupportUrl:          b.sMetadata.SupportUrl,
+		},
 	}}
 }
 //https://github.com/pivotal-cf/brokerapi/blob/0ea2a3913c148837e8615a1ef8bde757151934c3/api.go#L77
